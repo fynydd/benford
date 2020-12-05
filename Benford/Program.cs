@@ -96,67 +96,79 @@ namespace Benford
 
         static async Task Main(string[] args)
         {
-            StringBuilder output = new StringBuilder();
-            StringBuilder output2 = new StringBuilder();
-            var jpegFiles = Directory.GetFiles("images", "*.jpg");
-            var tiffFiles = Directory.GetFiles("images", "*.tiff");
-            var benford = new double[9];
-            var files = jpegFiles.Concat(tiffFiles);
+            var pathPrefix = "Benford";
+            var depthCount = 1;
 
-            ConcurrentQueue<Thread> threads = new ConcurrentQueue<Thread>();
-            int threadsRunning = 0;
-            int maxThreadCount = 16;
-            int sleepMs = 50;
-
-            await Console.Out.WriteLineAsync();
-
-            foreach (var file in files.OrderBy(f => f))
+            while (Directory.Exists(pathPrefix) == false && depthCount < 10)
             {
-                #region If too many threads are running, wait here
+                depthCount++;
 
-                do
-                {
-                    threadsRunning = 0;
+                var paths = new string[depthCount];
+                for (int x = 0; x < depthCount - 1; x++) paths[x] = "..";
+                paths[depthCount - 1] = "Benford";
+                pathPrefix = Path.Combine(paths);
+            }
 
-                    foreach (var thread in threads)
-                    {
-                        if (thread.IsAlive)
-                        {
-                            threadsRunning++;
-                        }
-                    }
+            if (Directory.Exists(pathPrefix))
+            {
+                StringBuilder output = new StringBuilder();
+                StringBuilder output2 = new StringBuilder();
+                var benford = new double[9];
 
-                    System.Threading.Thread.Sleep(sleepMs);
+                ConcurrentQueue<Thread> threads = new ConcurrentQueue<Thread>();
+                int threadsRunning = 0;
+                int maxThreadCount = 8;
+                int sleepMs = 50;
+                int counter = 0;
 
-                } while (threadsRunning >= maxThreadCount);
+                await Console.Out.WriteLineAsync();
+                await Console.Out.WriteLineAsync("BENFORD ANALYSIS RUNNING...");
+                await Console.Out.WriteLineAsync();
 
-                #endregion
+                #region Analyze List
 
-                #region Add a thread for the current file
+                Thread t2 = new Thread (async () => {
 
-                Thread t = new Thread (async () => {
-
-                    var package = await ProcessImageFile(file);
-                    var _file = file + " (" + string.Format("{0:0,000}", package.Total) + " pixels):";
+                    var list = File.ReadAllLines(Path.Combine(pathPrefix, "list.txt"));
+                    var package = new Package();
                     var _output = new StringBuilder();
 
-                    _output.Append(_file + "\r\n---------------------------------------------------------------------------\r\n");
+                    _output.Append("Analyzing list.txt (" + string.Format("{0:0,000}", list.Length) + " items)...\r\n---------------------------------------------------------------------------\r\n");
+
+                    foreach (var item in list.OrderBy(i => i))
+                    {
+                        var val = item.Substring(0, 1);
+
+                        switch (val)
+                        {
+                            case "1": package.Data[0]++; break;
+                            case "2": package.Data[1]++; break;
+                            case "3": package.Data[2]++; break;
+                            case "4": package.Data[3]++; break;
+                            case "5": package.Data[4]++; break;
+                            case "6": package.Data[5]++; break;
+                            case "7": package.Data[6]++; break;
+                            case "8": package.Data[7]++; break;
+                            case "9": package.Data[8]++; break;
+                        }
+
+                        package.Total++;
+                    }
+
                     _output.Append(await GenerateOutput(package));
 
-                    output.Append(_output);
+                    output2.Append(_output);
 
                     await Console.Out.WriteLineAsync(_output);
                 })
                 {
                     IsBackground = true
                 };
-                t.Start();
+                t2.Start();
 
-                threads.Enqueue(t);
+                threads.Enqueue(t2);
 
-                #endregion
-
-                #region Wait here if too many threads are running
+                #region Wait for list processing thread to complete
 
                 do
                 {
@@ -172,83 +184,126 @@ namespace Benford
 
                     System.Threading.Thread.Sleep(sleepMs);
 
-                } while (threadsRunning >= maxThreadCount);
+                } while (threadsRunning > 0);
 
                 #endregion
+
+                #endregion
+
+                #region Analyze Images
+
+                var jpegFiles = Directory.GetFiles(Path.Combine(pathPrefix, "images"), "*.jpg");
+                var tiffFiles = Directory.GetFiles(Path.Combine(pathPrefix, "images"), "*.tiff");
+                var files = jpegFiles.Concat(tiffFiles);
+
+                foreach (var file in files.OrderBy(f => f))
+                {
+                    #region If too many threads are running, wait here
+
+                    do
+                    {
+                        threadsRunning = 0;
+
+                        foreach (var thread in threads)
+                        {
+                            if (thread.IsAlive)
+                            {
+                                threadsRunning++;
+                            }
+                        }
+
+                        System.Threading.Thread.Sleep(sleepMs);
+
+                    } while (threadsRunning >= maxThreadCount);
+
+                    #endregion
+
+                    #region Add a thread for the current file
+
+                    Thread t = new Thread (async () => {
+
+                        var package = await ProcessImageFile(file);
+                        var _file = file + " (" + string.Format("{0:0,000}", package.Total) + " pixels)";
+                        var _output = new StringBuilder();
+
+                        counter++;
+
+                        _output.Append("Image " + counter + " of " + files.Count() + ": " + _file.Split(Path.DirectorySeparatorChar).Last() + "...\r\n---------------------------------------------------------------------------\r\n");
+                        _output.Append(await GenerateOutput(package));
+                        output.Append(_output);
+
+                        await Console.Out.WriteLineAsync(_output);
+                    })
+                    {
+                        IsBackground = true
+                    };
+                    t.Start();
+
+                    threads.Enqueue(t);
+
+                    #endregion
+
+                    #region Wait here if too many threads are running
+
+                    do
+                    {
+                        threadsRunning = 0;
+
+                        foreach (var thread in threads)
+                        {
+                            if (thread.IsAlive)
+                            {
+                                threadsRunning++;
+                            }
+                        }
+
+                        System.Threading.Thread.Sleep(sleepMs);
+
+                    } while (threadsRunning >= maxThreadCount);
+
+                    #endregion
+                }
+
+                #endregion
+
+                #region Wait for all threads to complete
+
+                do
+                {
+                    threadsRunning = 0;
+
+                    foreach (var thread in threads)
+                    {
+                        if (thread.IsAlive)
+                        {
+                            threadsRunning++;
+                        }
+                    }
+
+                    System.Threading.Thread.Sleep(sleepMs);
+
+                } while (threadsRunning > 0);
+
+                #endregion
+
+                // Append image results to list.txt results
+                output2.Append(output);
+
+                // Write results to disk
+                File.WriteAllText(Path.Combine(pathPrefix, "output.txt"), output2.ToString());
+
+                await Console.Out.WriteLineAsync("BENFORD ANALYSIS COMPLETE");
+                await Console.Out.WriteLineAsync("The file 'output.txt' contains these results.");
+                await Console.Out.WriteLineAsync();
             }
 
-            #region Queue "list.txt" processing thread
-
-            Thread t2 = new Thread (async () => {
-
-                var list = File.ReadAllLines("list.txt");
-                var package = new Package();
-                var _output = new StringBuilder();
-
-                _output.Append("list.txt\r\n---------------------------------------------------------------------------\r\n");
-
-                foreach (var item in list.OrderBy(i => i))
-                {
-                    var val = item.Substring(0, 1);
-
-                    switch (val)
-                    {
-                        case "1": package.Data[0]++; break;
-                        case "2": package.Data[1]++; break;
-                        case "3": package.Data[2]++; break;
-                        case "4": package.Data[3]++; break;
-                        case "5": package.Data[4]++; break;
-                        case "6": package.Data[5]++; break;
-                        case "7": package.Data[6]++; break;
-                        case "8": package.Data[7]++; break;
-                        case "9": package.Data[8]++; break;
-                    }
-
-                    package.Total++;
-                }
-
-                _output.Append(await GenerateOutput(package));
-
-                output2.Append(_output);
-
-                await Console.Out.WriteLineAsync(_output);
-            })
+            else
             {
-                IsBackground = true
-            };
-            t2.Start();
-
-            threads.Enqueue(t2);
-
-            #endregion
-
-            #region Wait for all threads to complete
-
-            do
-            {
-                threadsRunning = 0;
-
-                foreach (var thread in threads)
-                {
-                    if (thread.IsAlive)
-                    {
-                        threadsRunning++;
-                    }
-                }
-
-                System.Threading.Thread.Sleep(sleepMs);
-
-            } while (threadsRunning > 0);
-
-            #endregion
-
-            // Append list.txt processing to the end of the results
-            output.Append(output2);
-
-            // Write results to disk
-            File.WriteAllText("output.txt", output.ToString());
-
-            await Task.FromResult<object>(null); // this prevents compiler warnings when no await operators are used
+                await Console.Out.WriteLineAsync();
+                await Console.Out.WriteLineAsync("BENFORD ANALYSIS FAILED");
+                await Console.Out.WriteLineAsync("Could not find the project directory. Run from Visual Studio or cd into the 'Benford' folder and use 'dotnet run'.");
+                await Console.Out.WriteLineAsync();
+            }
         }
     }
 
