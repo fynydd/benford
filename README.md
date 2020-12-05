@@ -8,6 +8,22 @@ The distribution of first digits should follow the pattern in the image below:
 
 ![Benford's Law Chart](https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Rozklad_benforda.svg/440px-Rozklad_benforda.svg.png)
 
+This distribution is specifically:
+
+```
+Digit   Benford [%]
+=====   ===========
+1       30.10
+2       17.61
+3       12.49
+4       09.69
+5       07.92
+6       06.69
+7       05.80
+8       05.12
+9       04.58
+```
+
 ## Project
 
 This project is a .NET 5.0 console app project to play with Benford's Law on images and a text file with numeric values. You can fill the text file with a large, random data set from most any source to see if the data follows this law and if not, implying the data has been artificially altered. Likewise you can put a set of images (*.jpg, *.tiff) into the *images* folder to analyze the pixel values in them. If the image results deviate from the law it could mean the image has been processed or altered.
