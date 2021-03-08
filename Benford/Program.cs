@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -30,20 +31,44 @@ namespace Benford
         static async Task<StringBuilder> GenerateOutput(Package package)
         {
             StringBuilder output = new StringBuilder();
+            var devs = new List<decimal>();
+            var passed = false;
+            decimal largestVariance = 0;
 
             output.Append("Digit   Benford [%]   Observed [%]   Deviation\r\n");
             output.Append("=====   ===========   ============   =========\r\n");
 
             for (int x = 0; x < 9; x++)
             {
-                double temp = (double)(package.Data[x]/package.Total); // Calc % of total for x
-                double ben = await Benford(x+1); // Calc Benford's value % for x
+                decimal temp = (decimal)(package.Data[x]/package.Total); // Calc % of total for x
+                decimal ben = (decimal) await Benford(x+1); // Calc Benford's value % for x
+                decimal deviation = ben - temp;
 
                 // GenerateOutput output that also includes standard deviation for Benford's value versus observed value
-                var _output = (string.Format("{0:0}", (x + 1)) + "       " + string.Format("{0:00.00}", ben * 100) + "         " + string.Format("{0:00.00}", temp * 100) + "          " + string.Format("{0:0.0000}", (ben - temp)));
+                var _output = (string.Format("{0:0}", (x + 1)) + "       " + string.Format("{0:00.00}", ben * 100) + "         " + string.Format("{0:00.00}", temp * 100) + "          " + string.Format("{0:0.000000}", deviation));
+
+                devs.Add(Math.Abs(deviation));
+
+                if (Math.Abs(deviation) > Math.Abs(largestVariance))
+                {
+                    largestVariance = deviation;
+                }
 
                 output.Append(_output + "\r\n");
             }
+
+            if (Math.Abs(largestVariance) < (decimal)0.02)
+            {
+                if (devs.Average() < (decimal)0.007)
+                {
+                    passed = true;
+                }
+            }
+
+            output.Append("\r\n");
+            output.Append("LARGEST VARIANCE:                    " + string.Format("{0:0.000000}", largestVariance) + "\r\n");
+            output.Append("AVERAGE VARIANCE (ABS):              " + string.Format("{0:0.000000}", devs.Average()) + "\r\n");
+            output.Append("RESULT:                              " + (passed ? "PASSED" : "FAILED") + "\r\n");
 
             output.Append("\r\n");
 
